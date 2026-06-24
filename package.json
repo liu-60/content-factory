@@ -1,0 +1,28 @@
+{
+  "name": "content-factory-ltool",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "Ltool": "./Ltool/bin/ltool.js",
+    "ltool": "./Ltool/bin/ltool.js",
+    "ltool-mcp": "./Ltool/bin/ltool-mcp.js"
+  },
+  "scripts": {
+    "test": "node --test \"Ltool/test/*.test.js\"",
+    "smoke": "node Ltool/scripts/smoke.js",
+    "codegen:cover": "node Ltool/scripts/codegen-cover.js",
+    "workflow:toutiao": "node Ltool/scripts/workflow-toutiao.js",
+    "workflow:toutiao:edge": "node Ltool/scripts/workflow-toutiao-edge.js",
+    "edge:ltool": "node Ltool/scripts/launch-edge-ltool.js",
+    "ltool": "node Ltool/bin/ltool.js",
+    "mcp": "node Ltool/bin/ltool-mcp.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.5",
+    "playwright": "^1.54.2",
+    "playwright-core": "^1.54.2",
+    "ws": "^8.18.3",
+    "zod": "^3.25.76"
+  }
+}

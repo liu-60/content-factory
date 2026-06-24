@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ltool</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>Ltool</h1>
+          <p id="version">extension</p>
+        </div>
+        <button id="refreshButton" class="icon-button" type="button" title="刷新状态" aria-label="刷新状态">
+          <span aria-hidden="true">↻</span>
+        </button>
+      </header>
+
+      <section class="status-grid" aria-label="运行状态">
+        <div class="metric">
+          <span class="label">CLI / MCP</span>
+          <strong id="bridgeState">检查中</strong>
+          <small id="bridgeDetail">-</small>
+        </div>
+        <div class="metric">
+          <span class="label">Token</span>
+          <strong id="tokenState">检查中</strong>
+          <small id="tokenDetail">本地连接令牌</small>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="连接配置">
+        <label class="switch-row">
+          <span>启用桥接</span>
+          <input id="enabledInput" type="checkbox" />
+        </label>
+        <label>
+          <span>Bridge URL</span>
+          <input id="wsUrlInput" type="text" autocomplete="off" spellcheck="false" />
+        </label>
+        <label>
+          <span>Token</span>
+          <input id="tokenInput" type="password" autocomplete="off" spellcheck="false" />
+        </label>
+        <div class="actions">
+          <button id="saveButton" type="button">保存</button>
+          <span id="saveState" role="status"></span>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="平台登录状态">
+        <div class="section-head">
+          <h2>平台登录</h2>
+          <span id="refreshState"></span>
+        </div>
+        <div id="platformList" class="platform-list"></div>
+      </section>
+
+      <section class="panel muted" aria-label="最近任务">
+        <div class="section-head">
+          <h2>最近调用</h2>
+        </div>
+        <dl class="facts">
+          <div>
+            <dt>来源</dt>
+            <dd id="lastClient">-</dd>
+          </div>
+          <div>
+            <dt>方法</dt>
+            <dd id="lastMethod">-</dd>
+          </div>
+          <div>
+            <dt>批次</dt>
+            <dd id="lastBatch">-</dd>
+          </div>
+        </dl>
+        <p id="lastError" class="error-line"></p>
+      </section>
+    </main>
+    <script type="module" src="./popup.js"></script>
+  </body>
+</html>
