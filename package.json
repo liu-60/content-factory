@@ -14,6 +14,7 @@
     "codegen:cover": "node Ltool/scripts/codegen-cover.js",
     "workflow:toutiao": "node Ltool/scripts/workflow-toutiao.js",
     "workflow:toutiao:edge": "node Ltool/scripts/workflow-toutiao-edge.js",
+    "workflow:baijiahao:edge": "node Ltool/scripts/workflow-baijiahao-edge.js",
     "edge:ltool": "node Ltool/scripts/launch-edge-ltool.js",
     "ltool": "node Ltool/bin/ltool.js",
     "mcp": "node Ltool/bin/ltool-mcp.js"

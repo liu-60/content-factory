@@ -8,6 +8,7 @@ const url = args.url || args._[0];
 const platform = args.platform || inferPlatform(url) || 'draft';
 const output = resolve(args.output || `Ltool/recordings/${platform}-cover.codegen.js`);
 const userDataDir = resolve(args['user-data-dir'] || process.env.LTOOL_CODEGEN_USER_DATA_DIR || '.playwright/ltool-codegen-profile');
+const channel = args.channel || process.env.LTOOL_CODEGEN_CHANNEL || 'msedge';
 
 if (!url) {
   console.error(`Usage:
@@ -30,7 +31,7 @@ const childArgs = [
   '--target',
   'javascript',
   '--channel',
-  'chrome',
+  channel,
   '--user-data-dir',
   userDataDir,
   '--output',
@@ -42,6 +43,7 @@ console.log(`Starting Playwright codegen for ${platform}`);
 console.log(`Draft URL: ${url}`);
 console.log(`Output: ${output}`);
 console.log(`Profile: ${userDataDir}`);
+console.log(`Browser channel: ${channel}`);
 console.log('');
 console.log('Record only the cover upload flow, then close the codegen window to save the file.');
 
