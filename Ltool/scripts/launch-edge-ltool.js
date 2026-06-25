@@ -9,6 +9,8 @@ const platform = args.platform || 'toutiao';
 const loginUrls = {
   toutiao: 'https://mp.toutiao.com/',
   baijiahao: 'https://baijiahao.baidu.com/',
+  weixin: 'https://mp.weixin.qq.com/',
+  wechat: 'https://mp.weixin.qq.com/',
 };
 const loginUrl = loginUrls[platform] || platform;
 

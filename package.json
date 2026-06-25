@@ -1,6 +1,6 @@
 {
   "name": "content-factory-ltool",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "bin": {
@@ -13,8 +13,11 @@
     "smoke": "node Ltool/scripts/smoke.js",
     "codegen:cover": "node Ltool/scripts/codegen-cover.js",
     "workflow:toutiao": "node Ltool/scripts/workflow-toutiao.js",
+    "workflow:wechat:cli": "node Ltool/scripts/workflow-wechat-edge.js --browser chrome",
+    "workflow:wechat:chrome": "node Ltool/scripts/workflow-wechat-edge.js --browser chrome",
     "workflow:toutiao:edge": "node Ltool/scripts/workflow-toutiao-edge.js",
     "workflow:baijiahao:edge": "node Ltool/scripts/workflow-baijiahao-edge.js",
+    "workflow:wechat:edge": "node Ltool/scripts/workflow-wechat-edge.js",
     "edge:ltool": "node Ltool/scripts/launch-edge-ltool.js",
     "ltool": "node Ltool/bin/ltool.js",
     "mcp": "node Ltool/bin/ltool-mcp.js"

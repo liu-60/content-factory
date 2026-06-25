@@ -116,15 +116,23 @@ class BaseAdapter {
 }
 
 class WeixinAdapter extends BaseAdapter {
+  headerRuleIds = [920001];
+
   async checkAuth() {
     try {
-      const html = await (await fetch('https://mp.weixin.qq.com/', { credentials: 'include' })).text();
-      const token = html.match(/data:\s*\{[\s\S]*?t:\s*["']([^"']+)["']/)?.[1];
+      const html = await (await fetchWithTimeout('https://mp.weixin.qq.com/', { credentials: 'include' }, 30000, 'Weixin auth page')).text();
+      if (/登录超时|重新登录|login/i.test(html) && !/token=\d+/.test(html)) return platformInfo(this.platform, false);
+      const token = html.match(/[?&]token=(\d+)/)?.[1]
+        || html.match(/data:\s*\{[\s\S]*?t:\s*["'](\d+)["']/)?.[1]
+        || html.match(/token:\s*["']?(\d+)["']?/)?.[1];
       if (!token) return platformInfo(this.platform, false);
+      const ticket = html.match(/ticket:\s*["']([^"']+)["']/)?.[1] || '';
+      const userName = html.match(/user_name:\s*["']([^"']+)["']/)?.[1] || '';
+      if (!ticket || !userName) return platformInfo(this.platform, false, '', '', 'Weixin login metadata is incomplete; please re-login in Edge.');
       this.meta = {
         token,
-        ticket: html.match(/ticket:\s*["']([^"']+)["']/)?.[1] || '',
-        userName: html.match(/user_name:\s*["']([^"']+)["']/)?.[1] || '',
+        ticket,
+        userName,
         nickName: html.match(/nick_name:\s*["']([^"']+)["']/)?.[1] || '',
         svrTime: Number(html.match(/time:\s*["'](\d+)["']/)?.[1] || Date.now() / 1000),
       };
@@ -141,29 +149,59 @@ class WeixinAdapter extends BaseAdapter {
   async uploadImageByUrl(src) {
     if (!this.meta) await this.checkAuth();
     if (!this.meta?.token) throw new Error('Weixin token not available');
-    const blob = await urlToBlob(src);
-    const timestamp = Date.now();
-    const fileName = `${timestamp}.jpg`;
-    const formData = new FormData();
-    formData.append('type', blob.type || 'image/jpeg');
-    formData.append('id', String(timestamp));
-    formData.append('name', fileName);
-    formData.append('lastModifiedDate', new Date().toString());
-    formData.append('size', String(blob.size));
-    formData.append('file', blob, fileName);
-    const query = new URLSearchParams({ action: 'upload_material', f: 'json', scene: '8', writetype: 'doublewrite', groupid: '1', ticket_id: this.meta.userName, ticket: this.meta.ticket, svr_time: String(this.meta.svrTime), token: this.meta.token, lang: 'zh_CN', seq: String(Date.now()), t: String(Math.random()) });
-    const data = await (await fetch(`https://mp.weixin.qq.com/cgi-bin/filetransfer?${query}`, { method: 'POST', credentials: 'include', body: formData })).json();
-    if (data.base_resp?.err_msg !== 'ok' || !data.cdn_url) throw new Error(data.base_resp?.err_msg || 'Weixin image upload failed');
-    return { url: data.cdn_url };
+    return await this.withHeaderRules(async () => {
+      const blob = await urlToBlob(src);
+      const timestamp = Date.now();
+      const fileName = `${timestamp}.jpg`;
+      const formData = new FormData();
+      formData.append('type', blob.type || 'image/jpeg');
+      formData.append('id', String(timestamp));
+      formData.append('name', fileName);
+      formData.append('lastModifiedDate', new Date().toString());
+      formData.append('size', String(blob.size));
+      formData.append('file', blob, fileName);
+      const query = new URLSearchParams({ action: 'upload_material', f: 'json', scene: '8', writetype: 'doublewrite', groupid: '1', ticket_id: this.meta.userName, ticket: this.meta.ticket, svr_time: String(this.meta.svrTime), token: this.meta.token, lang: 'zh_CN', seq: String(Date.now()), t: String(Math.random()) });
+      const data = await executeFormDataInPlatformTab(this.platform, `https://mp.weixin.qq.com/cgi-bin/filetransfer?${query}`, formData, 90000);
+      if (data.base_resp?.err_msg !== 'ok' || !data.cdn_url) throw new Error(data.base_resp?.err_msg || data.err_msg || `Weixin image upload failed: ${JSON.stringify(data).slice(0, 300)}`);
+      return { url: data.cdn_url };
+    });
   }
 
   async saveArticle(article, options) {
     if (!this.meta) await this.checkAuth();
-    const cover = article.coverUpload && !article.coverUpload.error ? article.coverUpload : null;
-    const form = weixinForm(this.meta.token, article, cover);
-    const data = await (await fetch(`https://mp.weixin.qq.com/cgi-bin/operate_appmsg?t=ajax-response&sub=create&type=77&token=${this.meta.token}&lang=zh_CN`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(form) })).json();
-    if (!data.appMsgId) throw new Error(`Weixin save failed ret=${data.ret ?? data.base_resp?.ret ?? 'unknown'}`);
-    return this.result(true, { title: article.title, postId: data.appMsgId, postUrl: `https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit&action=edit&type=77&appmsgid=${data.appMsgId}&token=${this.meta.token}&lang=zh_CN`, draftOnly: !options.publish, message: `api=operate_appmsg; cover=${Boolean(cover)}` });
+    return await this.withHeaderRules(async () => {
+      const cover = article.coverUpload && !article.coverUpload.error ? article.coverUpload : null;
+      const form = weixinForm(this.meta.token, article, cover);
+      const data = await executeFetchInPlatformTab(this.platform, `https://mp.weixin.qq.com/cgi-bin/operate_appmsg?t=ajax-response&sub=create&type=77&token=${this.meta.token}&lang=zh_CN`, 'POST', new URLSearchParams(form).toString(), { 'Content-Type': 'application/x-www-form-urlencoded' });
+      const appMsgId = data.appMsgId || data.appmsgid || data.app_msg_id || data.AppMsgId;
+      if (!appMsgId) throw new Error(`Weixin save failed ret=${data.ret ?? data.base_resp?.ret ?? 'unknown'} msg=${data.err_msg || data.base_resp?.err_msg || ''} body=${JSON.stringify(data).slice(0, 300)}`);
+      return this.result(true, { title: article.title, postId: appMsgId, postUrl: `https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit&action=edit&type=77&appmsgid=${appMsgId}&token=${this.meta.token}&lang=zh_CN`, draftOnly: !options.publish, message: `api=operate_appmsg; cover=${Boolean(cover)}; imageWarnings=${article.imageUploadWarnings?.length || 0}` });
+    });
+  }
+
+  async withHeaderRules(fn) {
+    if (!chrome.declarativeNetRequest?.updateDynamicRules) return await fn();
+    const rules = [{
+      id: this.headerRuleIds[0],
+      priority: 1,
+      action: {
+        type: 'modifyHeaders',
+        requestHeaders: [
+          { header: 'Origin', operation: 'set', value: 'https://mp.weixin.qq.com' },
+          { header: 'Referer', operation: 'set', value: 'https://mp.weixin.qq.com/' },
+        ],
+      },
+      condition: {
+        urlFilter: '*://mp.weixin.qq.com/cgi-bin/*',
+        resourceTypes: ['xmlhttprequest'],
+      },
+    }];
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: this.headerRuleIds, addRules: rules });
+    try {
+      return await fn();
+    } finally {
+      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: this.headerRuleIds }).catch(() => {});
+    }
   }
 }
 
@@ -476,6 +514,55 @@ async function executeFetchInPlatformTab(platform, url, method, body, headers = 
   return result.data;
 }
 
+async function executeFormDataInPlatformTab(platform, url, formData, timeoutMs = 90000) {
+  const existing = await chrome.tabs.query({ url: `https://${platform.domains[0]}/*` });
+  const tab = existing.find((item) => item.id) || await chrome.tabs.create({ url: platform.composeUrl, active: false });
+  await waitForTabComplete(tab.id, 45000);
+  const entries = [];
+  for (const [key, value] of formData.entries()) {
+    if (value instanceof Blob) {
+      entries.push({ key, kind: 'blob', name: value.name || 'file.jpg', type: value.type || 'application/octet-stream', bytes: [...new Uint8Array(await value.arrayBuffer())] });
+    } else {
+      entries.push({ key, kind: 'text', value: String(value) });
+    }
+  }
+  const [injection] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: 'MAIN',
+    func: async (requestUrl, serializedEntries, requestTimeoutMs) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
+      try {
+        const body = new FormData();
+        for (const entry of serializedEntries) {
+          if (entry.kind === 'blob') {
+            body.append(entry.key, new File([new Uint8Array(entry.bytes)], entry.name, { type: entry.type }), entry.name);
+          } else {
+            body.append(entry.key, entry.value);
+          }
+        }
+        const response = await fetch(requestUrl, { method: 'POST', credentials: 'include', body, signal: controller.signal });
+        const text = await response.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { raw: text };
+        }
+        return { success: response.ok, status: response.status, data };
+      } catch (error) {
+        return { success: false, error: error.message || 'Platform form request failed' };
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    args: [url, entries, timeoutMs],
+  });
+  const result = injection?.result;
+  if (!result?.success) throw new Error(result?.error || result?.data?.message || `Platform form request failed: ${result?.status || 'unknown'}`);
+  return result.data;
+}
+
 async function fetchJson(url, options = {}) {
   return await (await fetch(url, { credentials: 'include', ...options })).json();
 }
@@ -490,9 +577,36 @@ async function getCookie(domain, name) {
 }
 
 async function urlToBlob(src) {
-  const response = await fetch(src);
+  if (String(src).startsWith('data:')) return dataUriToBlob(src);
+  const response = await fetchWithTimeout(src, {}, 60000, 'Image download');
   if (!response.ok) throw new Error(`Image download failed: ${src}`);
   return await response.blob();
+}
+
+function dataUriToBlob(src) {
+  const match = String(src).match(/^data:([^;,]+)?(;base64)?,([\s\S]*)$/);
+  if (!match) throw new Error('Invalid data URI image');
+  const mime = match[1] || 'application/octet-stream';
+  const isBase64 = Boolean(match[2]);
+  const raw = isBase64 ? atob(match[3]) : decodeURIComponent(match[3]);
+  const bytes = new Uint8Array(raw.length);
+  for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);
+  return new Blob([bytes], { type: mime });
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 60000, label = 'Fetch') {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(`${label} timeout after ${timeoutMs}ms`), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    if (!response.ok) throw new Error(`${label} failed status=${response.status}`);
+    return response;
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error(`${label} timeout after ${timeoutMs}ms`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function extractImages(content) {

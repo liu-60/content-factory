@@ -2,15 +2,14 @@
   "manifest_version": 3,
   "name": "Ltool Sync Bridge",
   "description": "Bridge local sync-doc content to logged-in creator platforms for Ltool CLI and MCP.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "action": {
     "default_title": "Ltool",
     "default_popup": "popup.html"
   },
-  "permissions": ["storage", "cookies", "tabs", "scripting", "alarms"],
+  "permissions": ["storage", "cookies", "tabs", "scripting", "alarms", "declarativeNetRequest"],
   "host_permissions": [
     "http://localhost/*",
-    "ws://localhost/*",
     "https://mp.weixin.qq.com/*",
     "https://creator.xiaohongshu.com/*",
     "https://www.xiaohongshu.com/*",
