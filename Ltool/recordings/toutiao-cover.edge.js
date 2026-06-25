@@ -23,10 +23,9 @@ const TEXT = {
   use: '\u4f7f\u7528',
   savingDraft: '\u8349\u7a3f\u4fdd\u5b58\u4e2d',
   saveFailed: '\u4fdd\u5b58\u5931\u8d25',
-  preview: '\u9884\u89c8',
+  previewAndPublish: '\u9884\u89c8\u5e76\u53d1\u5e03',
   publish: '\u53d1\u5e03',
   confirmPublish: '\u786e\u8ba4\u53d1\u5e03',
-  immediatePublish: '\u7acb\u5373\u53d1\u5e03',
   publishSuccess: '\u53d1\u5e03\u6210\u529f',
   submitted: '\u63d0\u4ea4\u6210\u529f',
   auditing: '\u5ba1\u6838\u4e2d',
@@ -81,15 +80,17 @@ export async function runToutiaoCoverFlow({
 
     if (publish) {
       console.log('[edge-cover] preview and publish starting');
-      await previewAndConfirmPublish(page);
+      const publishResult = await previewAndConfirmPublish(page);
       console.log('[edge-cover] preview and publish actions completed');
       state = await getToutiaoState(page);
+      state.publishSubmitted = publishResult.submitted;
+      state.publishStatus = getPublishStatus(state);
       assertPublishState(state);
-      console.log('[edge-cover] publish state verified');
+      console.log(`[edge-cover] publish state verified: ${state.publishStatus}`);
     }
 
     console.log(`Edge Toutiao cover${publish ? ' and publish' : ''} flow completed: ${draftUrl}`);
-    console.log(JSON.stringify(state));
+    console.log(formatToutiaoState(state));
     return state;
   } finally {
     if (ownsContext) await saveEdgeStorageState(browserContext).catch(() => {});
@@ -212,13 +213,10 @@ async function waitForCoverAndDraftSave(page) {
 }
 
 async function previewAndConfirmPublish(page) {
-  await clickFirstVisibleByText(page, [TEXT.preview], ['button', '[role="button"]', '.show-dialog-btn', 'span', 'div'], 15000);
-  await page.waitForTimeout(1500);
-  await closePreviewDialog(page);
-  await clickFirstVisibleByText(page, [TEXT.immediatePublish, TEXT.publish, TEXT.confirmPublish], ['button', '[role="button"]', 'span', 'div'], 30000);
+  await clickFirstVisibleByText(page, [TEXT.previewAndPublish], ['button', '[role="button"]', '.show-dialog-btn', 'span', 'div'], 30000);
   await page.waitForTimeout(1000);
 
-  const confirmClicked = await clickFirstVisibleByText(page, [TEXT.confirmPublish, TEXT.immediatePublish, TEXT.publish, TEXT.ok], ['button', '[role="button"]'], 10000).catch(() => false);
+  const confirmClicked = await clickFirstVisibleByText(page, [TEXT.confirmPublish], ['button', '[role="button"]'], 30000).catch(() => false);
   if (!confirmClicked) await page.keyboard.press('Enter').catch(() => {});
 
   await page.waitForFunction(
@@ -226,15 +224,8 @@ async function previewAndConfirmPublish(page) {
     { successTexts: [TEXT.publishSuccess, TEXT.submitted, TEXT.auditing], savingText: TEXT.savingDraft },
     { timeout: 120000 },
   ).catch(() => {});
-}
-
-async function closePreviewDialog(page) {
-  const visibleDialog = page.locator('.byte-modal, .byte-drawer, [role="dialog"]').filter({ hasText: TEXT.preview }).first();
-  if (!(await visibleDialog.count().catch(() => 0))) return;
-  const closeButton = visibleDialog.locator('.byte-modal-close, .byte-drawer-close, button').last();
-  if (await closeButton.count().catch(() => 0)) await closeButton.click({ timeout: 3000 }).catch(() => {});
-  await page.keyboard.press('Escape').catch(() => {});
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(1000);
+  return { submitted: confirmClicked };
 }
 
 async function scrollNearText(page, text) {
@@ -309,5 +300,23 @@ function assertCoverState(state) {
 
 function assertPublishState(state) {
   if (state.saveFailed) throw new Error('Toutiao publish failed: draft save failure is visible');
-  if (!state.publishSuccess && /publish/.test(state.url)) throw new Error('Toutiao publish confirmation did not reach a success/review state');
+  if (!state.publishSubmitted && !state.publishSuccess) throw new Error('Toutiao publish confirmation did not reach a success/review state');
+}
+
+function getPublishStatus(state) {
+  if (state.publishSuccess) return 'success-or-review';
+  if (state.publishSubmitted && !state.saveFailed) return 'submitted';
+  if (state.saveFailed) return 'failed';
+  return 'unknown';
+}
+
+function formatToutiaoState(state) {
+  return JSON.stringify({
+    url: state.url,
+    coverCount: state.coverCount,
+    publishStatus: state.publishStatus || getPublishStatus(state),
+    publishSubmitted: Boolean(state.publishSubmitted),
+    publishSuccess: Boolean(state.publishSuccess),
+    saveFailed: Boolean(state.saveFailed),
+  });
 }

@@ -79,7 +79,8 @@ try {
         context: edge.context,
         publish: true,
       });
-      console.log(`OK    toutiao      ${item.title || ''} ${publishState.url || item.postUrl}`);
+      const status = publishState.publishStatus ? ` status=${publishState.publishStatus}` : '';
+      console.log(`OK    toutiao      ${item.title || ''} ${publishState.url || item.postUrl}${status}`);
     }
   }
 } finally {
